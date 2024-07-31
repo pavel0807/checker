@@ -15,20 +15,24 @@ import (
 	"slices"
 	"strings"
 	"sync"
+
+	"gopkg.in/ini.v1"
 )
 
 func main() {
 
-	ip := "127.0.0.1"                                                        //ip address server
-	port := "80"                                                             // port server
-	grMax := 128                                                             //максимальное количество потоков (до 1024)
-	needFiles := []string{".hide.txt", "$MFT", "ntuser.dat"}                 //подстроки которые надо искать в названиях файла
-	needHashPath := []string{"\\Users\\mars\\Desktop\\develop\\mftwithname"} //папки в которых надо подсчитать хэш
-	needHash := []string{"f726d50e8bf94b6747ea9b07236851eb"}                 //массив искомых хэшей
-	onlyFind := true                                                         //индикатор обозначающий вывод всех хэшей в папках поиска
-	advanceHashInNeedFiles := false                                          //индикатор подсчета хэша для найденных по фильтру needFiles строк
-	hostname, err := os.Hostname()                                           // название машины
-	logFileName := fmt.Sprintf("%s_checkerKUL.log", hostname)                // название log-file
+	cfg := readINIFile()
+
+	//ip := "127.0.0.1"                                                        //ip address server
+	//port := "80"                                                             // port server
+	//grMax := 128                                                             //максимальное количество потоков (до 1024)
+	//needFiles := []string{".hide.txt", "$MFT", "ntuser.dat"}                 //подстроки которые надо искать в названиях файла
+	//needHashPath := []string{"\\Users\\mars\\Desktop\\develop\\mftwithname"} //папки в которых надо подсчитать хэш
+	//needHash := []string{"f726d50e8bf94b6747ea9b07236851eb"}                 //массив искомых хэшей
+	//onlyFind := true                                                         //индикатор обозначающий вывод всех хэшей в папках поиска
+	//advanceHashInNeedFiles := false                                          //индикатор подсчета хэша для найденных по фильтру needFiles строк
+	hostname, err := os.Hostname()                            // название машины
+	logFileName := fmt.Sprintf("%s_checkerKUL.log", hostname) // название log-file
 
 	if err != nil {
 		fmt.Println("Не удалось выяснить имя хоста!")
@@ -47,7 +51,7 @@ func main() {
 	root := "/"
 
 	var wg sync.WaitGroup
-	ch := make(chan int, grMax)
+	ch := make(chan int, cfg.grMax)
 
 	// Slice to hold the file paths
 	var files []string
@@ -68,7 +72,7 @@ func main() {
 
 	log.Printf("Совпадения по имени:")
 	//ищем файлы по подстроке
-	for _, sFile := range needFiles {
+	for _, sFile := range cfg.needFiles {
 
 		for _, file := range files {
 
@@ -79,7 +83,7 @@ func main() {
 					wg.Add(1)
 					defer func() { wg.Done(); <-ch }()
 					//если указано что надо подсчиттать хэш для найденных файлов
-					if advanceHashInNeedFiles {
+					if cfg.advanceHashInNeedFiles {
 						MD5Sum, errMD5 := getHashMD5(file)
 						SHA1Sum, errSHA1 := getHashSHA1(file)
 						if errMD5 != nil {
@@ -105,7 +109,7 @@ func main() {
 	fmt.Printf("Подсчет хэшей в директории:")
 	//ищем хэши файлов
 	for _, file := range files {
-		for _, sFile := range needHashPath {
+		for _, sFile := range cfg.needHashPath {
 			if strings.Contains(strings.ToLower(file), strings.ToLower(sFile)) && !strings.Contains(strings.ToLower(file), strings.ToLower("$Recycle.Bin")) {
 
 				//fmt.Println(file)
@@ -128,9 +132,9 @@ func main() {
 					SHA1Sum = strings.ToLower(SHA1Sum)
 					MD5Sum = strings.ToLower(MD5Sum)
 					//если необходимо осуществить поиск по хэшу
-					if onlyFind {
+					if cfg.onlyFind {
 						//если найден хэшу
-						if slices.Contains(needHash, MD5Sum) || slices.Contains(needHash, SHA1Sum) {
+						if slices.Contains(cfg.needHash, MD5Sum) || slices.Contains(cfg.needHash, SHA1Sum) {
 							log.Printf("%s			::		%s", MD5Sum, file)
 							log.Printf("%s	::		%s", SHA1Sum, file)
 						}
@@ -150,7 +154,7 @@ func main() {
 		return
 	}
 
-	_, err = uploadFileMultipart(logFileName, ip, port)
+	_, err = uploadFileMultipart(logFileName, cfg.ip, cfg.port)
 	if err != nil {
 		fmt.Println("Удачно отправлено!")
 	}
@@ -238,4 +242,39 @@ func uploadFileMultipart(path string, ip string, port string) (*http.Response, e
 	}
 
 	return resp, err
+}
+
+func readINIFile() Kuls {
+
+	conf := Kuls{}
+	inidata, err := ini.Load("kaef.ini")
+	if err != nil {
+		fmt.Printf("Fail to read file: %v", err)
+		os.Exit(1)
+	}
+	section := inidata.Section("kaef")
+
+	conf.ip = section.Key("ip").String()
+	conf.port = section.Key("port").String()
+	conf.grMax = 128
+	buff := section.Key("needFiles").String()
+	conf.needFiles = strings.Split(buff, "|")
+	buff = section.Key("needHashPath").String()
+	conf.needHashPath = strings.Split(buff, "|")
+	buff = section.Key("needHash").String()
+	conf.needHash = strings.Split(buff, "|")
+	conf.onlyFind, _ = section.Key("onlyFind").Bool()
+	conf.advanceHashInNeedFiles, _ = section.Key("advanceHashInNeedFiles").Bool()
+	return conf
+}
+
+type Kuls struct {
+	ip                     string   //:= "127.0.0.1"                                                        //ip address server
+	port                   string   //:= "80"                                                             // port server
+	grMax                  int      //:= 128                                                             //максимальное количество потоков (до 1024)
+	needFiles              []string //:= []string{".hide.txt", "$MFT", "ntuser.dat"}                 //подстроки которые надо искать в названиях файла
+	needHashPath           []string //:= []string{"\\Users\\mars\\Desktop\\develop\\mftwithname"} //папки в которых надо подсчитать хэш
+	needHash               []string //:= []string{"f726d50e8bf94b6747ea9b07236851eb"}                 //массив искомых хэшей
+	onlyFind               bool     //:= true                                                         //индикатор обозначающий вывод всех хэшей в папках поиска
+	advanceHashInNeedFiles bool     //:= false
 }
