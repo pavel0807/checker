@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -73,11 +74,11 @@ func main() {
 	log.Printf("Совпадения по имени:")
 	//ищем файлы по подстроке
 	for _, sFile := range cfg.needFiles {
-
 		for _, file := range files {
-
-			//if strings.Contains(strings.ToLower(file), strings.ToLower(sFile)) {
-			if strings.Contains(strings.ToLower(file), strings.ToLower(sFile)) {
+			matched, _ := regexp.MatchString(sFile, file)
+			if matched {
+				//if strings.Contains(strings.ToLower(file), strings.ToLower(sFile)) {
+				//if strings.Contains(strings.ToLower(file), strings.ToLower(sFile)) {
 				go func() {
 					ch <- 1
 					wg.Add(1)
@@ -108,10 +109,10 @@ func main() {
 	log.Printf("Подсчет хэшей в директории:")
 	fmt.Printf("Подсчет хэшей в директории:")
 	//ищем хэши файлов
-	for _, file := range files {
-		for _, sFile := range cfg.needHashPath {
-			if strings.Contains(strings.ToLower(file), strings.ToLower(sFile)) && !strings.Contains(strings.ToLower(file), strings.ToLower("$Recycle.Bin")) {
-
+	for _, sFile := range cfg.needHashPath {
+		for _, file := range files {
+			matched, _ := regexp.MatchString(sFile, file)
+			if matched {
 				//fmt.Println(file)
 				go func() {
 					ch <- 1
